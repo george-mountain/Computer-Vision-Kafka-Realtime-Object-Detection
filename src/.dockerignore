@@ -1,0 +1,28 @@
+# Ignore common Python files and directories
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+
+# Ignore development and build files
+venv/
+build/
+dist/
+
+# Ignore any sensitive or confidential files
+secrets/
+
+# Ignore any temporary or cache files
+*.swp
+*.swo
+*.log
+*.tmp
+
+# Ignore any version control files
+.git/
+.gitignore
+
+# Ignore any IDE-specific files
+.vscode/
+.idea/
+*.iml
