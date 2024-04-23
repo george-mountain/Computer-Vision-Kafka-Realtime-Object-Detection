@@ -1,0 +1,91 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper_container
+    env_file:
+      - .env
+    volumes:
+      - real_time_object_detection_zookeeper_data:/var/lib/zookeeper
+    networks:
+      - real_time_object_detection_network
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka_container
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"  
+    env_file:
+      - .env
+    volumes:
+      - real_time_object_detection_kafka_data:/var/lib/kafka
+    networks:
+      - real_time_object_detection_network
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres_container
+    env_file:
+      - .env
+    ports:
+      - "5433:5432"
+    volumes:
+      - real_time_object_detection_postgres_data:/var/lib/postgresql/data
+    networks:
+      - real_time_object_detection_network
+  
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_container
+    env_file:
+      - .env
+    ports:
+      - "5080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - real_time_object_detection_network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana_container
+    env_file:
+      - .env
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    networks:
+      - real_time_object_detection_network
+
+  api:
+    build: ./src/
+    image: real_time_object_detection_api_image
+    container_name: real_time_object_detection_api_container
+    command: ["./wait-for-kafka.sh", "kafka", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      - zookeeper
+      - kafka
+      - postgres
+    volumes:
+      - ./src:/code 
+    networks:
+      - real_time_object_detection_network
+
+networks:
+  real_time_object_detection_network:
+    driver: bridge
+
+volumes:
+  real_time_object_detection_zookeeper_data:
+  real_time_object_detection_kafka_data:
+  real_time_object_detection_postgres_data:
+  grafana_data:
+  pgadmin_data:
