@@ -26,3 +26,6 @@ secrets/
 .vscode/
 .idea/
 *.iml
+# Ignore any CSV and XLSX files
+*.csv
+*.xlsx
