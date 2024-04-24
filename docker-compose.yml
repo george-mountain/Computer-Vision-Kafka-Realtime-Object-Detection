@@ -76,6 +76,7 @@ services:
       - postgres
     volumes:
       - ./src:/code 
+       
     networks:
       - real_time_object_detection_network
 
