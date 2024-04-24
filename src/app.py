@@ -1,21 +1,30 @@
 from fastapi import FastAPI, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List
+from pydantic import BaseModel
 from helpers.utilities import ObjectProcessor, KafkaManager
+from helpers.models import Models
 from sqlalchemy import create_engine
 import json
 import pandas as pd
 from kafka import KafkaProducer, KafkaConsumer
 from kafka.errors import KafkaError
 
-app = FastAPI()
+app = FastAPI(title="Realtime Detection", version="1.0.0")
 
+# Add CORS middleware to allow cross-origin requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 bootstrap_servers = "kafka:9092"
 
-
 # PostgreSQL configuration
 db_url = "postgresql://postgresuser:postgrespass@postgres:5432/testdb"
-
 
 # Initialize ObjectProcessor
 processor = ObjectProcessor()
@@ -31,17 +40,24 @@ kafka_manager = KafkaManager(bootstrap_servers)
 
 
 @app.post("/start-detection")
-def start_process(
-    background_tasks: BackgroundTasks,
-    topic: str,
-    links: List[str],
-    live: bool,
-    saving_timer: int,
+def start_detection(
+    background_tasks: BackgroundTasks, request_body: Models.DetectionRequest
 ):
-    # Create a new topic using KafkaManager
-    kafka_manager.create_topic(topic)
+    topic = request_body.topic
+    links = request_body.links
+    live = request_body.live
+    saving_timer = request_body.saving_timer
 
-    # Add task to background tasks
+    kafka_manager.create_topic(topic)
+    data = {
+        "status": "Process started",
+        "topic": topic,
+        "links": links,
+        "live": live,
+        "saving_timer": saving_timer,
+    }
+    print(f"Data: {data}")
+    print("*" * 50)
     background_tasks.add_task(
         processor.process, producer, topic, links, live, saving_timer
     )
@@ -49,30 +65,28 @@ def start_process(
 
 
 @app.get("/stop-detection")
-def stop_process():
+def stop_detection():
     processor.stop()
     return {"status": "Process stopped"}
 
 
 @app.post("/consume-data")
-async def consume_data(topic: str, limit: int):
+async def consume_data(request_body: Models.ConsumeDataRequest):
+    topic = request_body.topic
+    limit = request_body.limit
     try:
-        # Create a Kafka consumer
         consumer = KafkaConsumer(
             topic,
             bootstrap_servers=bootstrap_servers,
             value_deserializer=lambda x: json.loads(x.decode("utf-8")),
         )
 
-        # Create an empty list to store the received messages
         messages = []
 
-        # Consume messages from Kafka
         for message in consumer:
             messages.append(message.value)
             print(f"Received message: {message.value}")
 
-            # Process messages in batches of 'limit'
             if len(messages) >= limit:
                 kafka_manager.process_and_store(db_url, messages)
                 return {"status": "Data consumed and processed", "message": messages}
@@ -87,9 +101,9 @@ async def consume_data(topic: str, limit: int):
 @app.post("/start-writing-to-database")
 def start_writing_to_database(
     background_tasks: BackgroundTasks,
-    topic: str,
+    request_body: Models.StartWritingToDatabaseRequest,
 ):
-    # Create a Kafka consumer
+    topic = request_body.topic
     consumer = KafkaConsumer(
         topic,
         bootstrap_servers=bootstrap_servers,
@@ -102,7 +116,7 @@ def start_writing_to_database(
     return {"status": "Writing to database started"}
 
 
-@app.post("/stop-writing-to-database")
+@app.get("/stop-writing-to-database")
 def stop_writing_to_database():
     kafka_manager.stop_writing_to_database()
     return {"status": "Writing to database stopped"}
